@@ -1,0 +1,14 @@
+LKM/*.o
+LKM/*.ko 
+LKM/*.mod.c 
+LKM/*.symvers
+LKM/*.order
+LKM/*.mod
+LKM/*.cmd
+LKM/*.d
+LKM/*.tmp_versions
+tags
+LKM/user-app
+busybox  
+initramfs_arm64.cpio.gz  
+linux

@@ -1,0 +1,1 @@
+savedcmd_Module.symvers :=  /home/khan/workspace/linux_kernel_module_development/linux/scripts/mod/modpost -M          -o Module.symvers -T modules.order -i /home/khan/workspace/linux_kernel_module_development/linux/Module.symvers -e 
