@@ -3,7 +3,7 @@ This repo contains loadable linux kernel modules c code relevant Makefile and Kc
 
 ## UART ioctl interface
 
-`/dev/nfdev_module` supports the shared commands declared in
+`/dev/nfdev` supports the shared commands declared in
 `nfdev_ioctl.h`:
 
 - `NFDEV_IOCTL_UART_WRITE` sends `message.length` bytes from `message.data`.

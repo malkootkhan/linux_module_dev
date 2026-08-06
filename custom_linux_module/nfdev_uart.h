@@ -10,6 +10,7 @@
 #include <linux/wait.h>
 
 #define NFDEV_UART_RX_FIFO_SIZE         1024
+#define NFDEV_UART_PATH_MAX             64
 
 struct file;
 struct task_struct;
@@ -17,6 +18,7 @@ struct task_struct;
 struct nfdev_uart {
         struct file *file;
         struct task_struct *rx_thread;
+        char device_path[NFDEV_UART_PATH_MAX];
 
         struct mutex tx_lock;
 

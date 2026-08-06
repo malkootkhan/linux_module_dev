@@ -8,8 +8,8 @@
 
 #include "nfdev_uart.h"
 
-#define NFDEV_NAME		"nfdev_module"
-#define NFDEV_CLASS_NAME	"nfdev_module"
+#define NFDEV_NAME		"nfdev"
+#define NFDEV_CLASS_NAME	"nfdev"
 #define NFDEV_MINOR_COUNT	1
 
 struct class;

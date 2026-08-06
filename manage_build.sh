@@ -15,6 +15,8 @@ SHARE_DIR="$(realpath "$SHARE_DIR")"
 WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LINUX_DIR="${WORKSPACE_DIR}/linux"
 BUSYBOX_DIR="${WORKSPACE_DIR}/busybox"
+USERSPACE_DIR="${WORKSPACE_DIR}/userspace"
+USER_APP_FILE="${USERSPACE_DIR}/build/user_app"
 INITRAMFS_OUT="${WORKSPACE_DIR}/initramfs_arm64.cpio.gz"
 
 # External dependency sources (override with environment variables when needed)
@@ -46,9 +48,10 @@ show_help() {
     echo "  busybox   - Reset, patch out broken utilities, build static BusyBox"
     echo "  deps_fetch - Clone Linux and BusyBox source trees if missing"
     echo "  deps_status - Show which external dependencies are present"
-    echo "  fs        - Assemble standard directories, write init script, pack initramfs"
-    echo "  run       - Launch the custom compiled Image and root filesystem inside QEMU"
-    echo "  all       - Sequentially execute: kernel -> busybox -> fs -> run"
+    echo "  fs          - Assemble standard directories, write init script, pack initramfs"
+    echo "  qemu_run    - Launch the custom compiled Image and root filesystem inside QEMU"
+    echo "  qemu_gdb_run - Launch QEMU paused with GDB stub on tcp::1234"
+    echo "  all         - Sequentially execute: kernel -> busybox -> fs -> qemu_run"
     echo "  module_build - Build the kernel module and copy it to the shared directory"
     echo ""
     echo "Environment overrides:"
@@ -56,7 +59,7 @@ show_help() {
     echo "  LINUX_REPO_URL / LINUX_REPO_REF / LINUX_CLONE_DEPTH"
     echo "  BUSYBOX_REPO_URL / BUSYBOX_REPO_REF / BUSYBOX_CLONE_DEPTH"
     echo ""
-    echo "Example: $0 run"
+    echo "Example: $0 qemu_run"
     exit 1
 }
 
@@ -156,6 +159,21 @@ ensure_linux() {
 
 ensure_busybox() {
     ensure_dependency "BusyBox" "$BUSYBOX_DIR" "$BUSYBOX_REPO_URL" "$BUSYBOX_REPO_REF" "$BUSYBOX_CLONE_DEPTH"
+}
+
+build_userspace_app() {
+    if [ ! -d "$USERSPACE_DIR" ]; then
+        echo "Error: Userspace directory not found: $USERSPACE_DIR"
+        exit 1
+    fi
+
+    echo "--> Building userspace app..."
+    make -C "$USERSPACE_DIR" CROSS_COMPILE=$CROSS_COMPILE -j"$JOBS"
+
+    if [ ! -f "$USER_APP_FILE" ]; then
+        echo "Error: Userspace app not found: $USER_APP_FILE"
+        exit 1
+    fi
 }
 
 build_kernel() {
@@ -290,19 +308,59 @@ run_qemu() {
    # -fsdev local,id=hostshare,path="$SHARE_DIR",security_model=none \
    # -device virtio-9p-device,fsdev=hostshare,mount_tag=hostshare \
    # -nographic
+    # Rebuild before copy to avoid running a stale binary in guest.
+    build_userspace_app
+    cp -v "$USER_APP_FILE" "$SHARE_DIR"
   qemu-system-aarch64 \
     -M virt \
     -cpu cortex-a57 \
     -m 1G \
     -kernel "$KERNEL_IMG" \
     -initrd "$INITRAMFS_OUT" \
-    -append "console=ttyAMA0,115200 loglevel=8" \
+    -append "console=ttyAMA0,115200 loglevel=8 nfdev_module.uart_path=/dev/ttyS0" \
     -fsdev local,id=hostshare,path="$SHARE_DIR",security_model=none \
     -device virtio-9p-device,fsdev=hostshare,mount_tag=hostshare \
     -serial mon:stdio \
     -chardev pty,id=uart1 \
     -device pci-serial,chardev=uart1 \
     -display none
+}
+
+run_qemu_gdb() {
+    echo "=== [Task] Launching QEMU in GDB Debug Mode ==="
+    KERNEL_IMG="${LINUX_DIR}/arch/arm64/boot/Image"
+
+    if [ ! -f "$KERNEL_IMG" ] || [ ! -f "$INITRAMFS_OUT" ]; then
+        echo "Error: Missing required execution targets. Please build 'kernel' and 'fs' targets first."
+        exit 1
+    fi
+
+    echo "--> QEMU shared directory: $SHARE_DIR"
+    echo "--> Current shared-directory contents:"
+    ls -la "$SHARE_DIR"
+
+    echo "--> GDB connection info:"
+    echo "    target remote :1234"
+    echo "--> QEMU starts paused (-S). Use GDB to continue execution."
+
+    # Keep shared userspace helper fresh in debug runs too.
+    build_userspace_app
+    cp -v "$USER_APP_FILE" "$SHARE_DIR"
+
+    qemu-system-aarch64 \
+    -M virt \
+    -cpu cortex-a57 \
+    -m 1G \
+    -kernel "$KERNEL_IMG" \
+    -initrd "$INITRAMFS_OUT" \
+    -append "console=ttyAMA0,115200 loglevel=8 nokaslr nfdev_module.uart_path=/dev/ttyS0" \
+    -fsdev local,id=hostshare,path="$SHARE_DIR",security_model=none \
+    -device virtio-9p-device,fsdev=hostshare,mount_tag=hostshare \
+    -serial mon:stdio \
+    -chardev pty,id=uart1 \
+    -device pci-serial,chardev=uart1 \
+    -display none \
+    -S -s
 }
 
 build_module() {
@@ -312,7 +370,6 @@ build_module() {
     MODULE_DIR="${WORKSPACE_DIR}/custom_linux_module"
     MODULE_FILE="${MODULE_DIR}/nfdev_module.ko"
     USERSPACE_APP_DIR=${WORKSPACE_DIR}/userspace
-    USER_APP_FILE="${USERSPACE_APP_DIR}/build/user_app"
 
     if [ ! -d "$MODULE_DIR" ]; then
         echo "Error: Module directory not found: $MODULE_DIR"
@@ -340,10 +397,7 @@ build_module() {
         exit 1
     fi
 
-    if [ ! -f "$USER_APP_FILE" ]; then
-        echo "Error: Userspace app not found: $USER_APP_FILE"
-        exit 1
-    fi
+    build_userspace_app
 
     cp -v "$MODULE_FILE" "$SHARE_DIR/nfdev_module.ko"
     cp -v "$USER_APP_FILE" "$SHARE_DIR/user_app"
@@ -381,7 +435,14 @@ case "$1" in
     fs)
         pack_filesystem
         ;;
+    qemu_run)
+        run_qemu
+        ;;
+    qemu_gdb_run)
+        run_qemu_gdb
+        ;;
     run)
+        echo "Warning: 'run' is deprecated; use 'qemu_run' instead."
         run_qemu
         ;;
     all)

@@ -1,20 +1,15 @@
-obj-m += nfdev_module.o
-nfdev_module-objs := nfdev_chrdev.o nfdev_main.o nfdev_uart.o # Add other source files here if split
-
-PWD := $(shell pwd)
-
-# Path to the kernel top-level directory
-KDIR := $(PWD)/../linux
-
-# Allow overriding ARCH/CROSS_COMPILE from the environment
+ifneq ($(KERNELRELEASE),)
+obj-y += nfdev_module.o
+nfdev_module-y := nfdev_chrdev.o nfdev_main.o nfdev_uart.o
+else
+KDIR ?= $(CURDIR)/../linux
 ARCH ?= arm64
 CROSS_COMPILE ?= aarch64-linux-gnu-
+export CONFIG_NFDEV_MODULE ?= m
 
 .PHONY: all clean
-
 all:
-	$(MAKE) -C $(KDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) M=$(PWD) modules
-
+	$(MAKE) -C $(KDIR) M=$(CURDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
 clean:
-	$(MAKE) -C $(KDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) M=$(PWD) clean
-
+	$(MAKE) -C $(KDIR) M=$(CURDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) clean
+endif

@@ -92,7 +92,20 @@ This copies to $HOME/qemu-share:
 
 ```bash
 ./manage_build.sh fs
-./manage_build.sh run
+./manage_build.sh qemu_run
+```
+
+### E. Run QEMU paused for GDB debugging
+
+```bash
+./manage_build.sh qemu_gdb_run
+```
+
+Then connect from another host terminal:
+
+```bash
+gdb-multiarch linux/vmlinux
+(gdb) target remote :1234
 ```
 
 ## 4) QEMU File Share and UART
@@ -103,7 +116,7 @@ QEMU mounts host directory at:
 - Guest: /mnt/host
 
 UART serial side terminal:
-1. Start QEMU using ./manage_build.sh run
+1. Start QEMU using ./manage_build.sh qemu_run
 2. In QEMU logs, find the generated /dev/pts/X
 3. Open another terminal and connect:
 
@@ -139,7 +152,7 @@ If build is broken and you want a clean restart:
 ./manage_build.sh kernel_clean_build
 ./manage_build.sh busybox
 ./manage_build.sh fs
-./manage_build.sh run
+./manage_build.sh qemu_run
 ```
 
 If you only need help menu:
@@ -168,7 +181,7 @@ Ignored examples:
 ```bash
 ./manage_build.sh module_build
 ./manage_build.sh fs
-./manage_build.sh run
+./manage_build.sh qemu_run
 ```
 
 Inside guest:

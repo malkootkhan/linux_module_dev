@@ -8,16 +8,20 @@
 #include "nfdev_internal.h"
 
 static struct nfdev_context nfdev_ctx;
+static char *uart_path = "/dev/ttyS0";
+
+module_param(uart_path, charp, 0644);
+MODULE_PARM_DESC(uart_path, "Path to host UART device node (default: /dev/ttyS0)");
 
 static int __init nfdev_init(void)
 {
 	int ret;
 
-     ret = nfdev_uart_register(&nfdev_ctx.uart, "/dev/ttyS0");
-    if (ret) {
-        pr_err("failed to initialize UART: %d\n", ret);
-        return ret;
-    }
+	ret = nfdev_uart_register(&nfdev_ctx.uart, uart_path);
+	if (ret) {
+		pr_err("failed to initialize UART backend (%s): %d\n", uart_path, ret);
+		return ret;
+	}
 
 	ret = nfdev_chrdev_register(&nfdev_ctx);
 	if (ret) {

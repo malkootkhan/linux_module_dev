@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
 
-menuconfig NFDEV_MODULE
-        tristate "Netfilter control device"
-        depends on NETFILTER && INET
-        default m
-        help
-          Build a character-device control interface...
-endmenu
+config NFDEV_MODULE
+	tristate "Netfilter control device"
+	depends on NETFILTER && INET
+	default y
+	help
+	  Build a character-device control interface.

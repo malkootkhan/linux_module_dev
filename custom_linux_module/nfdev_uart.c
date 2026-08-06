@@ -13,6 +13,7 @@
 #include <linux/mutex.h>
 #include <linux/sched.h>
 #include <linux/spinlock.h>
+#include <linux/string.h>
 #include <linux/wait.h>
 
 #include "nfdev_uart.h"
@@ -83,9 +84,61 @@ static int nfdev_uart_rx_thread(void *data)
         return 0;
 }
 
-int nfdev_uart_register(struct nfdev_uart *uart, const char *device_path)
+static int nfdev_uart_start(struct nfdev_uart *uart)
 {
         struct file *file;
+        int ret;
+
+        mutex_lock(&uart->tx_lock);
+
+        if (uart->file) {
+                mutex_unlock(&uart->tx_lock);
+                return 0;
+        }
+
+        /*
+         * O_NONBLOCK prevents the RX kernel thread from remaining blocked
+         * forever when the module is being removed.
+         */
+        file = filp_open(uart->device_path,
+                         O_RDWR | O_NOCTTY | O_NONBLOCK,
+                         0);
+        if (IS_ERR(file)) {
+                ret = PTR_ERR(file);
+                mutex_unlock(&uart->tx_lock);
+
+                pr_warn_ratelimited("failed to open %s: %d\n",
+                                    uart->device_path, ret);
+                return ret;
+        }
+
+        uart->file = file;
+        WRITE_ONCE(uart->stopping, false);
+
+        uart->rx_thread = kthread_run(nfdev_uart_rx_thread,
+                                      uart,
+                                      "nfdev_uart_rx");
+        if (IS_ERR(uart->rx_thread)) {
+                ret = PTR_ERR(uart->rx_thread);
+                uart->rx_thread = NULL;
+
+                filp_close(uart->file, NULL);
+                uart->file = NULL;
+
+                mutex_unlock(&uart->tx_lock);
+
+                pr_err("failed to start UART RX thread: %d\n", ret);
+                return ret;
+        }
+
+        mutex_unlock(&uart->tx_lock);
+
+        pr_info("UART %s opened for TX and RX\n", uart->device_path);
+        return 0;
+}
+
+int nfdev_uart_register(struct nfdev_uart *uart, const char *device_path)
+{
         int ret;
 
         if (!uart || !device_path)
@@ -98,40 +151,14 @@ int nfdev_uart_register(struct nfdev_uart *uart, const char *device_path)
 
         uart->file = NULL;
         uart->rx_thread = NULL;
-        uart->stopping = false;
+        WRITE_ONCE(uart->stopping, false);
 
-        /*
-         * O_NONBLOCK prevents the RX kernel thread from remaining blocked
-         * forever when the module is being removed.
-         */
-        file = filp_open(device_path,
-                         O_RDWR | O_NOCTTY | O_NONBLOCK,
-                         0);
-        if (IS_ERR(file)) {
-                ret = PTR_ERR(file);
-                pr_err("failed to open %s: %d\n",
-                       device_path, ret);
+        ret = strscpy(uart->device_path, device_path,
+                      sizeof(uart->device_path));
+        if (ret < 0)
                 return ret;
-        }
 
-        uart->file = file;
-
-        uart->rx_thread = kthread_run(nfdev_uart_rx_thread,
-                                      uart,
-                                      "nfdev_uart_rx");
-        if (IS_ERR(uart->rx_thread)) {
-                ret = PTR_ERR(uart->rx_thread);
-                uart->rx_thread = NULL;
-
-                pr_err("failed to start UART RX thread: %d\n", ret);
-
-                filp_close(uart->file, NULL);
-                uart->file = NULL;
-
-                return ret;
-        }
-
-        pr_info("UART %s opened for TX and RX\n", device_path);
+        pr_info("UART backend configured for %s\n", uart->device_path);
 
         return 0;
 }
@@ -148,8 +175,9 @@ ssize_t nfdev_uart_write(struct nfdev_uart *uart,
         if (!length)
                 return 0;
 
-        if (!uart->file)
-                return -ENODEV;
+        ret = nfdev_uart_start(uart);
+        if (ret)
+                return ret;
 
         mutex_lock(&uart->tx_lock);
 
@@ -177,6 +205,10 @@ ssize_t nfdev_uart_read(struct nfdev_uart *uart,
 
         if (!length)
                 return 0;
+
+        ret = nfdev_uart_start(uart);
+        if (ret)
+                return ret;
 
         if (nonblock && !nfdev_uart_rx_available(uart))
                 return -EAGAIN;
