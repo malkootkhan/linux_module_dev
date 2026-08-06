@@ -1,14 +1,25 @@
-LKM/*.o
-LKM/*.ko 
-LKM/*.mod.c 
-LKM/*.symvers
-LKM/*.order
-LKM/*.mod
-LKM/*.cmd
-LKM/*.d
-LKM/*.tmp_versions
+# Source-only policy: keep only these file types unignored
+*
+!*/
+!*.c
+!*.h
+!*.sh
+!*.md
+!.gitignore
+
+# External dependency trees (kept local, never committed)
+busybox/
+linux/
+
+# Generated outputs
+*.mod.c
+*.mod
+*.o
+*.ko
+*.cmd
+*.symvers
+*.order
+modules.order
+Module.symvers
+initramfs_arm64.cpio.gz
 tags
-LKM/user-app
-busybox  
-initramfs_arm64.cpio.gz  
-linux

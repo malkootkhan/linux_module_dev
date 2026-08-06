@@ -1,1 +1,0 @@
-savedcmd_nfdev_module.ko := aarch64-linux-gnu-ld -r -EL  -maarch64elf -z noexecstack --build-id=sha1  -T /home/khan/workspace/linux_kernel_module_development/linux/scripts/module.lds -o nfdev_module.ko nfdev_module.o nfdev_module.mod.o .module-common.o
