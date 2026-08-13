@@ -189,3 +189,36 @@ Inside guest:
 2. Run user app
 3. Verify behavior from guest shell and UART terminal
 
+## 9) Firewall Rule CLI (nfdev)
+
+`/mnt/host/user_app` now works as a rule-management CLI for `/dev/nfdev`.
+
+Examples:
+
+```bash
+/mnt/host/user_app add 10.0.2.0/24 any tcp any 22 drop
+/mnt/host/user_app list
+/mnt/host/user_app stats
+/mnt/host/user_app enable 1
+/mnt/host/user_app simulate 10.0.2.15 1.1.1.1 tcp 12345 22 60
+/mnt/host/user_app remove 1
+/mnt/host/user_app flush
+/mnt/host/user_app save /mnt/host/rules.conf
+/mnt/host/user_app load /mnt/host/rules.conf
+```
+
+Sample configuration file is available at `userspace/rules.conf`.
+
+Supported actions:
+
+- `accept`
+- `drop`
+- `inject` (mock action)
+
+Supported protocols:
+
+- `any`
+- `tcp`
+- `udp`
+- `icmp`
+
