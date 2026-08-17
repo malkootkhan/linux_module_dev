@@ -77,6 +77,56 @@ cd linux
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j"$(nproc)" Image
 ```
 
+## KUnit Kernel Tests
+
+`nfdev` KUnit coverage is implemented in `nfdev_kunit.c` and built as module object
+`nfdev_kunit.o` (see `custom_linux_module/Makefile`).
+
+### 1) Enable KUnit in kernel config
+
+From kernel menuconfig:
+
+```bash
+cd linux
+make ARCH=arm64 menuconfig
+```
+
+Enable KUnit support, then confirm `.config` contains at least:
+
+```text
+CONFIG_KUNIT=y
+```
+
+After saving config, rebuild the kernel.
+
+### 2) Rebuild kernel and module
+
+```bash
+./manage_build.sh kernel_build
+./manage_build.sh module_build
+```
+
+### 3) Test suite structure in `nfdev_kunit.c`
+
+- Define test functions for rule validation and packet evaluation paths.
+- Collect all test function entries in `struct kunit_case nfdev_test_cases[]`.
+- Create `struct kunit_suite nfdev_test_suite` and assign `.test_cases = nfdev_test_cases`.
+- Register suite with `kunit_test_suite(nfdev_test_suite)`.
+
+This is the standard kernel KUnit pattern and is what the `nfdev` tests use.
+
+### 4) Run in guest kernel
+
+After booting the rebuilt kernel, insert the module and check kernel log:
+
+```bash
+insmod /mnt/host/nfdev_kunit.ko
+dmesg | tail -n 200
+```
+
+Current status: suite loads and all defined test cases pass after build and module
+insertion in the running kernel.
+
 ## Userspace CLI
 
 CLI binary: `userspace/build/user_app`

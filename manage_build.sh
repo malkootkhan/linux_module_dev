@@ -400,6 +400,7 @@ build_module() {
     build_userspace_app
 
     cp -v "$MODULE_FILE" "$SHARE_DIR/nfdev_module.ko"
+    cp -v "$MODULE_DIR/nfdev_kunit.ko" "$SHARE_DIR/nfdev_kunit.ko"
     cp -v "$USER_APP_FILE" "$SHARE_DIR/user_app"
 
     echo "=== Module Build Complete ==="

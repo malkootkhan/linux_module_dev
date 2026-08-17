@@ -1,5 +1,6 @@
 ifneq ($(KERNELRELEASE),)
 obj-m += nfdev_module.o
+obj-m += nfdev_kunit.o
 nfdev_module-y := nfdev_chrdev.o nfdev_main.o nfdev_uart.o
 else
 KDIR ?= $(CURDIR)/../linux
