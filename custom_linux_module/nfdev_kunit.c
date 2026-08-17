@@ -2,6 +2,7 @@
 
 #include <kunit/test.h>
 #include <linux/errno.h>
+#include <linux/slab.h>
 #include <linux/string.h>
 
 #include "nfdev_internal.h"
@@ -142,39 +143,43 @@ static void nfdev_rule_matches_packet_test(struct kunit *test)
 
 static void nfdev_eval_packet_filtering_disabled_test(struct kunit *test)
 {
-    struct nfdev_context ctx;
+    struct nfdev_context *ctx;
     struct nfdev_packet_meta packet = nfdev_kunit_base_packet();
     u32 matched_rule_id = 123;
     bool matched = true;
     u8 action;
 
-    memset(&ctx, 0, sizeof(ctx));
-    nfdev_rules_init(&ctx);
-    ctx.filtering_enabled = false;
+    ctx = kunit_kzalloc(test, sizeof(*ctx), GFP_KERNEL);
+    KUNIT_ASSERT_NOT_ERR_OR_NULL(test, ctx);
 
-    action = nfdev_eval_packet(&ctx, &packet, &matched_rule_id, &matched);
+    nfdev_rules_init(ctx);
+    ctx->filtering_enabled = false;
+
+    action = nfdev_eval_packet(ctx, &packet, &matched_rule_id, &matched);
 
     KUNIT_EXPECT_EQ(test, action, (u8)NFDEV_ACTION_ACCEPT);
     KUNIT_EXPECT_FALSE(test, matched);
     KUNIT_EXPECT_EQ(test, matched_rule_id, (u32)0);
-    KUNIT_EXPECT_EQ(test, ctx.packets_total, (u64)1);
-    KUNIT_EXPECT_EQ(test, ctx.packets_accepted, (u64)1);
-    KUNIT_EXPECT_EQ(test, ctx.packets_dropped, (u64)0);
+    KUNIT_EXPECT_EQ(test, ctx->packets_total, (u64)1);
+    KUNIT_EXPECT_EQ(test, ctx->packets_accepted, (u64)1);
+    KUNIT_EXPECT_EQ(test, ctx->packets_dropped, (u64)0);
 }
 
 static void nfdev_eval_packet_matching_rule_test(struct kunit *test)
 {
-    struct nfdev_context ctx;
+    struct nfdev_context *ctx;
     struct nfdev_packet_meta packet = nfdev_kunit_base_packet();
     struct nfdev_rule_slot *slot;
     u32 matched_rule_id = 0;
     bool matched = false;
     u8 action;
 
-    memset(&ctx, 0, sizeof(ctx));
-    nfdev_rules_init(&ctx);
+    ctx = kunit_kzalloc(test, sizeof(*ctx), GFP_KERNEL);
+    KUNIT_ASSERT_NOT_ERR_OR_NULL(test, ctx);
 
-    slot = &ctx.rules[0];
+    nfdev_rules_init(ctx);
+
+    slot = &ctx->rules[0];
     slot->in_use = true;
     slot->rule = nfdev_kunit_base_rule();
     slot->rule.id = 77;
@@ -182,18 +187,18 @@ static void nfdev_eval_packet_matching_rule_test(struct kunit *test)
     slot->rule.action = NFDEV_ACTION_DROP;
     slot->rule.proto = NFDEV_PROTO_TCP;
     slot->rule.dst_port = 80;
-    ctx.rule_count = 1;
+    ctx->rule_count = 1;
 
-    action = nfdev_eval_packet(&ctx, &packet, &matched_rule_id, &matched);
+    action = nfdev_eval_packet(ctx, &packet, &matched_rule_id, &matched);
 
     KUNIT_EXPECT_EQ(test, action, (u8)NFDEV_ACTION_DROP);
     KUNIT_EXPECT_TRUE(test, matched);
     KUNIT_EXPECT_EQ(test, matched_rule_id, (u32)77);
     KUNIT_EXPECT_EQ(test, slot->rule.packets, (u64)1);
     KUNIT_EXPECT_EQ(test, slot->rule.bytes, (u64)packet.packet_len);
-    KUNIT_EXPECT_EQ(test, ctx.packets_total, (u64)1);
-    KUNIT_EXPECT_EQ(test, ctx.packets_dropped, (u64)1);
-    KUNIT_EXPECT_EQ(test, ctx.packets_accepted, (u64)0);
+    KUNIT_EXPECT_EQ(test, ctx->packets_total, (u64)1);
+    KUNIT_EXPECT_EQ(test, ctx->packets_dropped, (u64)1);
+    KUNIT_EXPECT_EQ(test, ctx->packets_accepted, (u64)0);
 }
 
 static struct kunit_case nfdev_test_cases[] = {
